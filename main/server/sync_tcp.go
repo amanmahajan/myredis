@@ -16,7 +16,7 @@ Simple read method to read 512 bytes from the connection at a time
 
 TODO : Try to implement read more than 512 bytes later
 */
-func readCommand(c net.Conn) (*core.RedisCommand, error) {
+func readCommand(c io.ReadWriter) (*core.RedisCommand, error) {
 
 	buf := make([]byte, 512)
 	// Read 512 bytes for now. Implement reading more later
@@ -40,7 +40,7 @@ func readCommand(c net.Conn) (*core.RedisCommand, error) {
 /*
 Reply to the client
 */
-func respond(cmd *core.RedisCommand, c net.Conn) error {
+func respond(cmd *core.RedisCommand, c io.ReadWriter) error {
 
 	err := core.EvalAndRespond(cmd, c)
 	if err != nil {
@@ -93,6 +93,6 @@ func RunSyncTcpServer() {
 
 }
 
-func respondError(err error, c net.Conn) {
+func respondError(err error, c io.ReadWriter) {
 	c.Write([]byte(fmt.Sprintf("-%s\r\n", err)))
 }

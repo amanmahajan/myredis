@@ -2,11 +2,11 @@ package core
 
 import (
 	"errors"
+	"io"
 	"log"
-	"net"
 )
 
-func evaluatePing(args []string, conn net.Conn) error {
+func evaluatePing(args []string, conn io.ReadWriter) error {
 	byteArr := make([]byte, 0)
 	if len(args) >= 2 {
 		return errors.New("Not enough arguments")
@@ -25,7 +25,7 @@ func evaluatePing(args []string, conn net.Conn) error {
 	return nil
 
 }
-func EvalAndRespond(cmd *RedisCommand, c net.Conn) error {
+func EvalAndRespond(cmd *RedisCommand, c io.ReadWriter) error {
 	log.Println("comamnd:", cmd.Command)
 	switch cmd.Command {
 	case "PING":
