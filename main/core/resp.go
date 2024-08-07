@@ -124,15 +124,18 @@ func DecodeArrayString(data []byte) ([]string, error) {
 	return tokens, nil
 }
 
-func Encode(value interface{}, isSimleStr bool) []byte {
+func Encode(value interface{}, isSimpleStr bool) []byte {
 	switch t := value.(type) {
 	case string:
-		if isSimleStr {
+		if isSimpleStr {
 			return []byte(fmt.Sprintf("+%s\r\n", t))
 		}
 		return []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(t), t)) // bulk string
 
+	case int64:
+		return []byte(fmt.Sprintf(":%d\r\n", t))
+	default:
+		return NilResp
 	}
-	return []byte{}
 
 }
