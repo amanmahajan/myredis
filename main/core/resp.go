@@ -132,7 +132,7 @@ func Encode(value interface{}, isSimpleStr bool) []byte {
 		}
 		return []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(t), t)) // bulk string
 
-	case int64:
+	case int64, int32, int16, int8:
 		return []byte(fmt.Sprintf(":%d\r\n", t))
 	default:
 		return NilResp

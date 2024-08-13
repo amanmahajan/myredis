@@ -1,4 +1,4 @@
-package server
+package core
 
 import "time"
 
@@ -32,4 +32,12 @@ func Put(key string, value *Obj) {
 
 func Get(key string) *Obj {
 	return store[key]
+}
+
+func Delete(key string) bool {
+	if _, ok := store[key]; ok {
+		delete(store, key)
+		return true
+	}
+	return false
 }

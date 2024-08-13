@@ -6,9 +6,13 @@ import (
 	"myredis/core"
 	"net"
 	"syscall"
+	"time"
 )
 
 var clients int = 0
+
+var lastCronExecution time.Time = time.Now()
+var deleteInterval = 1 * time.Second
 
 // AsyncTcpServer MACOS compatible Server
 func AsyncTcpServer() error {
@@ -74,6 +78,13 @@ func AsyncTcpServer() error {
 	}
 
 	for {
+
+		// Run the expiration key algorithm after every 1 sec
+		if time.Now().After(lastCronExecution.Add(deleteInterval)) {
+			core.DeleteExpiredKey()
+			lastCronExecution = time.Now()
+		}
+
 		// See if any file descriptor ready for io
 
 		nevents, err := syscall.Kevent(kq, nil, events, nil)
