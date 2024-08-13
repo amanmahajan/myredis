@@ -4,13 +4,12 @@ import (
 	"errors"
 	"io"
 	"log"
-	"myredis/server"
 	"strconv"
 	"time"
 )
 
-var NilResp = []byte("$-1\r\n")
-var NoKeyExist = []byte("$-2\r\n")
+var NilResp = []byte(":-1\r\n")
+var NoKeyExist = []byte(":-2\r\n")
 
 func evaluatePing(args []string, conn io.ReadWriter) error {
 	byteArr := make([]byte, 0)
@@ -42,6 +41,11 @@ func EvalAndRespond(cmd *RedisCommand, c io.ReadWriter) error {
 		return evaluateGet(cmd.Args, c)
 	case "TTL":
 		return evaluateTTL(cmd.Args, c)
+	case "DEL":
+		return evaluateDelete(cmd.Args, c)
+	case "EXPIRE":
+		return evaluateExpire(cmd.Args, c)
+
 	default:
 		return evaluatePing(cmd.Args, c)
 	}
@@ -74,7 +78,7 @@ func evaluateSet(args []string, conn io.ReadWriter) error {
 		}
 	}
 
-	server.Put(key, server.NewObject(val, duration))
+	Put(key, NewObject(val, duration))
 	conn.Write([]byte("+OK\r\n")) // Sending OK output
 	return nil
 }
@@ -86,7 +90,7 @@ func evaluateGet(args []string, conn io.ReadWriter) error {
 
 	key := args[0]
 
-	obj := server.Get(key)
+	obj := Get(key)
 	if obj == nil {
 		conn.Write(NilResp)
 		return nil
@@ -109,7 +113,7 @@ func evaluateTTL(args []string, conn io.ReadWriter) error {
 
 	key := args[0]
 
-	obj := server.Get(key)
+	obj := Get(key)
 	if obj == nil {
 		conn.Write(NoKeyExist)
 		return nil
@@ -125,7 +129,41 @@ func evaluateTTL(args []string, conn io.ReadWriter) error {
 		return nil
 
 	}
-	c.Write(Encode(int64(remainingDurationMs/1000), false))
+	conn.Write(Encode(int64(remainingDurationMs/1000), false))
 	return nil
 
+}
+
+func evaluateDelete(args []string, conn io.ReadWriter) error {
+	totalDel := 0
+	for _, str := range args {
+		if Delete(str) {
+			totalDel++
+		}
+
+	}
+	conn.Write(Encode(totalDel, false))
+}
+
+func evaluateExpire(args []string, conn io.ReadWriter) error {
+	if len(args) <= 1 {
+		return errors.New("Wrong arguments for evaluating expire")
+	}
+
+	keyStr := args[0]
+	expireTime, err := strconv.ParseInt(args[1], 10, 64)
+	if err != nil {
+		return err
+	}
+
+	key := Get(keyStr)
+	if key == nil {
+		// Sending 0 as timeout not set and key does not exist
+		conn.Write([]byte(":0\r\n"))
+		return nil
+	}
+
+	key.Value = time.Now().UnixMilli() + expireTime*1000
+	conn.Write([]byte(":1\r\n"))
+	return nil
 }
