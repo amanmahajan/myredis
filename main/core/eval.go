@@ -17,7 +17,7 @@ func evaluatePing(args []string, conn io.ReadWriter) error {
 		return errors.New("Not enough arguments")
 	}
 	if len(args) == 0 { // PING Scenario
-		byteArr = Encode("PING", true)
+		byteArr = Encode("PONG", true)
 
 	} else if len(args) == 1 { // Ping "Hello" scenario
 		byteArr = Encode(args[0], true)
@@ -58,6 +58,8 @@ func evaluateSet(args []string, conn io.ReadWriter) error {
 
 	var key, val string
 	var duration int64 = -1
+
+	key = args[0]
 
 	for k := 2; k < len(args); k++ {
 
@@ -143,6 +145,7 @@ func evaluateDelete(args []string, conn io.ReadWriter) error {
 
 	}
 	conn.Write(Encode(totalDel, false))
+	return nil
 }
 
 func evaluateExpire(args []string, conn io.ReadWriter) error {

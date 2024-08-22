@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"log"
 	"myredis/config"
 	"myredis/core"
@@ -14,8 +15,8 @@ var clients int = 0
 var lastCronExecution time.Time = time.Now()
 var deleteInterval = 1 * time.Second
 
-// AsyncTcpServer MACOS compatible Server
-func AsyncTcpServer() error {
+// RunAsyncTcpServer MACOS compatible Server
+func RunAsyncTcpServer() error {
 
 	log.Println("Starting AsyncTcpServer")
 
@@ -31,7 +32,7 @@ func AsyncTcpServer() error {
 	events := make([]syscall.Kevent_t, max_clients)
 
 	// Lets create a socket. It returns server file descriptor
-	serverFD, err := syscall.Socket(syscall.AF_INET, syscall.O_NONBLOCK|syscall.SOCK_STREAM, 0)
+	serverFD, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_STREAM, 0)
 	if err != nil {
 		return err
 	}
@@ -86,9 +87,12 @@ func AsyncTcpServer() error {
 		}
 
 		// See if any file descriptor ready for io
-
 		nevents, err := syscall.Kevent(kq, nil, events, nil)
 		if err != nil {
+			if errors.Is(err, syscall.EINTR) {
+				continue // Retry the syscall if it was interrupted
+			}
+
 			return err
 		}
 		for i := 0; i < nevents; i++ {
