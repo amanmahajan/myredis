@@ -15,5 +15,8 @@ func setupFlags() {
 func main() {
 	setupFlags()
 	log.Println("Starting main")
-	server.RunSyncTcpServer()
+	err := server.RunAsyncTcpServer()
+	if err != nil {
+		log.Fatal(err)
+	}
 }
