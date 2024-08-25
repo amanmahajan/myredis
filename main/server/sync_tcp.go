@@ -11,42 +11,56 @@ import (
 	"strings"
 )
 
+func toArrayString(intfs []interface{}) ([]string, error) {
+
+	values := make([]string, len(intfs))
+	for i := range intfs {
+		values[i] = intfs[i].(string)
+	}
+	return values, nil
+
+}
+
 /*
 Simple read method to read 512 bytes from the connection at a time
 
 TODO : Try to implement read more than 512 bytes later
 */
-func readCommand(c io.ReadWriter) (*core.RedisCommand, error) {
+func readCommands(c io.ReadWriter) (core.RedisCommands, error) {
 
 	buf := make([]byte, 512)
-	// Read 512 bytes for now. Implement reading more later
-	_, err := c.Read(buf[:])
+	n, err := c.Read(buf[:])
 
 	if err != nil {
 		return nil, err
 	}
 
-	val, err := core.DecodeArrayString(buf)
+	values, err := core.Decode(buf[:n])
 	if err != nil {
 		return nil, err
 	}
-	return &core.RedisCommand{
-		Command: strings.ToUpper(val[0]),
-		Args:    val[1:],
-	}, nil
+
+	commands := make([]*core.RedisCommand, 0)
+	for _, v := range values {
+		tokens, err := toArrayString(v.([]interface{}))
+		if err != nil {
+			return nil, err
+		}
+		commands = append(commands, &core.RedisCommand{
+			Command: strings.ToUpper(tokens[0]),
+			Args:    tokens[1:],
+		})
+	}
+	return commands, nil
 
 }
 
 /*
 Reply to the client
 */
-func respond(cmd *core.RedisCommand, c io.ReadWriter) error {
+func respond(cmd core.RedisCommands, c io.ReadWriter) {
 
-	err := core.EvalAndRespond(cmd, c)
-	if err != nil {
-		respondError(err, c)
-	}
-	return nil
+	core.EvalAndRespond(cmd, c)
 }
 
 // RunSyncTcpServer Inefficient TCP server that accepts only 1 connection at a time
@@ -72,7 +86,7 @@ func RunSyncTcpServer() {
 
 		// Client connected. Start reading the data
 		for {
-			cmd, err := readCommand(c)
+			cmds, err := readCommands(c)
 			if err != nil {
 				c.Close()
 				currentClients--
@@ -84,10 +98,8 @@ func RunSyncTcpServer() {
 				log.Println("err", err)
 
 			}
-			log.Println("Command received:", cmd)
-			if err := respond(cmd, c); err != nil {
-				log.Println("Error responding to client:", err)
-			}
+			respond(cmds, c)
+
 		}
 	}
 
