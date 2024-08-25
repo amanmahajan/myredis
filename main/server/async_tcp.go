@@ -12,7 +12,7 @@ import (
 
 var clients int = 0
 
-var lastCronExecution time.Time = time.Now()
+var lastCronExecution = time.Now()
 var deleteInterval = 1 * time.Second
 
 // RunAsyncTcpServer MACOS compatible Server
@@ -121,13 +121,13 @@ func RunAsyncTcpServer() error {
 				}
 			} else {
 				comm := core.FileDescriptorComm{FileDescriptor: int(events[i].Ident)}
-				cmd, err := readCommand(comm)
+				cmds, err := readCommands(comm)
 				if err != nil {
 					syscall.Close(int(events[i].Ident))
 					clients--
 					continue
 				}
-				respond(cmd, comm)
+				respond(cmds, comm)
 			}
 		}
 	}

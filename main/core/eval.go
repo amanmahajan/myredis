@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"log"
@@ -10,11 +11,46 @@ import (
 
 var NilResp = []byte(":-1\r\n")
 var NoKeyExist = []byte(":-2\r\n")
+var RespOk = []byte("+OK\r\n")
+var RespZero = []byte(":0\r\n")
+var RespOne = []byte(":1\r\n")
 
-func evaluatePing(args []string, conn io.ReadWriter) error {
+func EvalAndRespond(cmds RedisCommands, c io.ReadWriter) {
+
+	byteArr := make([]byte, 0)
+	buffer := bytes.NewBuffer(byteArr)
+	for _, cmd := range cmds {
+
+		log.Println("comamnd:", cmd.Command)
+		switch cmd.Command {
+		case "PING":
+			buffer.Write(evaluatePing(cmd.Args))
+		case "SET":
+
+			buffer.Write(evaluateSet(cmd.Args))
+		case "GET":
+
+			buffer.Write(evaluateGet(cmd.Args))
+		case "TTL":
+			buffer.Write(evaluateTTL(cmd.Args))
+		case "DEL":
+
+			buffer.Write(evaluateDelete(cmd.Args))
+		case "EXPIRE":
+
+			buffer.Write(evaluateExpire(cmd.Args))
+
+		default:
+			buffer.Write(evaluatePing(cmd.Args))
+		}
+	}
+	c.Write(buffer.Bytes())
+}
+
+func evaluatePing(args []string) []byte {
 	byteArr := make([]byte, 0)
 	if len(args) >= 2 {
-		return errors.New("Not enough arguments")
+		return Encode(errors.New("Not enough arguments"), false)
 	}
 	if len(args) == 0 { // PING Scenario
 		byteArr = Encode("PONG", true)
@@ -23,43 +59,20 @@ func evaluatePing(args []string, conn io.ReadWriter) error {
 		byteArr = Encode(args[0], true)
 	}
 
-	_, err := conn.Write(byteArr)
-	if err != nil {
-		return err
-	}
-	return nil
+	return byteArr
 
 }
-func EvalAndRespond(cmd *RedisCommand, c io.ReadWriter) error {
-	log.Println("comamnd:", cmd.Command)
-	switch cmd.Command {
-	case "PING":
-		return evaluatePing(cmd.Args, c)
-	case "SET":
-		return evaluateSet(cmd.Args, c)
-	case "GET":
-		return evaluateGet(cmd.Args, c)
-	case "TTL":
-		return evaluateTTL(cmd.Args, c)
-	case "DEL":
-		return evaluateDelete(cmd.Args, c)
-	case "EXPIRE":
-		return evaluateExpire(cmd.Args, c)
 
-	default:
-		return evaluatePing(cmd.Args, c)
-	}
-}
-
-func evaluateSet(args []string, conn io.ReadWriter) error {
+func evaluateSet(args []string) []byte {
 	if len(args) <= 1 {
-		return errors.New("Not enough arguments")
+		return Encode(errors.New("Not enough arguments"), false)
 	}
 
 	var key, val string
 	var duration int64 = -1
 
 	key = args[0]
+	val = args[1]
 
 	for k := 2; k < len(args); k++ {
 
@@ -67,76 +80,67 @@ func evaluateSet(args []string, conn io.ReadWriter) error {
 		case "EX", "ex":
 			k++
 			if len(args) <= k {
-				return errors.New("Not enough arguments for expiration")
+				return Encode(errors.New("Not enough arguments for expiration"), false)
 			}
 			timeSec, err := strconv.ParseInt(args[k], 10, 64)
 
 			if err != nil {
-				return errors.New("Invalid expiration")
+				return Encode(errors.New("Invalid expiration"), false)
 			}
 			duration = timeSec * 1000
 		default:
-			return errors.New("Invalid command")
+			return Encode(errors.New("Invalid command"), false)
 		}
 	}
 
 	Put(key, NewObject(val, duration))
-	conn.Write([]byte("+OK\r\n")) // Sending OK output
-	return nil
+	return RespOk
 }
 
-func evaluateGet(args []string, conn io.ReadWriter) error {
+func evaluateGet(args []string) []byte {
 	if len(args) != 1 {
-		return errors.New("Wrong arguments for get")
+		return Encode(errors.New("Wrong arguments for get"), false)
 	}
 
 	key := args[0]
 
 	obj := Get(key)
 	if obj == nil {
-		conn.Write(NilResp)
-		return nil
+		return NilResp
 	}
 
 	if obj.Expiry != -1 && obj.Expiry < time.Now().UnixMilli() {
-		conn.Write(NilResp)
-		return nil
+		return NilResp
 	}
-	conn.Write(Encode(obj.Value, false))
-	return nil
+	return Encode(obj.Value, false)
 }
 
 // Get the ttl value from the key
-func evaluateTTL(args []string, conn io.ReadWriter) error {
+func evaluateTTL(args []string) []byte {
 
 	if len(args) != 1 {
-		return errors.New("Wrong arguments for evaluating ttl")
+		return Encode(errors.New("Wrong arguments for evaluating ttl"), false)
 	}
 
 	key := args[0]
 
 	obj := Get(key)
 	if obj == nil {
-		conn.Write(NoKeyExist)
-		return nil
+		return NoKeyExist
 	}
 	if obj.Expiry == -1 {
-		conn.Write(NilResp)
-		return nil
+		return NoKeyExist
 	}
 
 	remainingDurationMs := -obj.Expiry - time.Now().UnixMilli()
 	if remainingDurationMs < 0 {
-		conn.Write(NoKeyExist)
-		return nil
+		return NoKeyExist
 
 	}
-	conn.Write(Encode(int64(remainingDurationMs/1000), false))
-	return nil
-
+	return Encode(int64(remainingDurationMs/1000), false)
 }
 
-func evaluateDelete(args []string, conn io.ReadWriter) error {
+func evaluateDelete(args []string) []byte {
 	totalDel := 0
 	for _, str := range args {
 		if Delete(str) {
@@ -144,29 +148,26 @@ func evaluateDelete(args []string, conn io.ReadWriter) error {
 		}
 
 	}
-	conn.Write(Encode(totalDel, false))
-	return nil
+	return Encode(totalDel, false)
 }
 
-func evaluateExpire(args []string, conn io.ReadWriter) error {
+func evaluateExpire(args []string) []byte {
 	if len(args) <= 1 {
-		return errors.New("Wrong arguments for evaluating expire")
+		return Encode(errors.New("Wrong arguments for evaluating expire"), false)
 	}
 
 	keyStr := args[0]
 	expireTime, err := strconv.ParseInt(args[1], 10, 64)
 	if err != nil {
-		return err
+		return Encode(err, false)
 	}
 
 	key := Get(keyStr)
 	if key == nil {
 		// Sending 0 as timeout not set and key does not exist
-		conn.Write([]byte(":0\r\n"))
-		return nil
+		return RespZero
 	}
 
 	key.Value = time.Now().UnixMilli() + expireTime*1000
-	conn.Write([]byte(":1\r\n"))
-	return nil
+	return RespOne
 }
