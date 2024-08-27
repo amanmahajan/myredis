@@ -5,23 +5,19 @@ import "time"
 // Starting the project just with hashmap. Will optimize later
 var store map[string]*Obj
 
-type Obj struct {
-	Value  interface{}
-	Expiry int64
-}
-
 func init() {
 	store = make(map[string]*Obj)
 }
 
-func NewObject(value interface{}, durationMs int64) *Obj {
+func NewObject(value interface{}, durationMs int64, objType uint8, objEncoding uint8) *Obj {
 	var expiry int64 = -1
 	if durationMs > 0 {
 		expiry = durationMs + time.Now().UnixMilli()
 	}
 	return &Obj{
-		Value:  value,
-		Expiry: expiry,
+		TypeEncoding: objType | objEncoding,
+		Value:        value,
+		Expiry:       expiry,
 	}
 
 }

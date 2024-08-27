@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 )
@@ -127,14 +128,25 @@ func Encode(value interface{}, isSimpleStr bool) []byte {
 		if isSimpleStr {
 			return []byte(fmt.Sprintf("+%s\r\n", t))
 		}
-		return []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(t), t)) // bulk string
+		return encodeString(t) // bulk string
 
 	case int64, int32, int16, int8:
 		return []byte(fmt.Sprintf(":%d\r\n", t))
+	case []string:
+		b := make([]byte, 0)
+		buffer := bytes.NewBuffer(b)
+		for _, b := range value.([]string) {
+			buffer.Write(encodeString(b))
+		}
+		return []byte(fmt.Sprintf("*%d\r\n%s", len(t), buffer.Bytes()))
 	case error:
 		return []byte(fmt.Sprintf("-%s\r\n", t))
 	default:
 		return NilResp
 	}
 
+}
+
+func encodeString(t string) []byte {
+	return []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(t), t))
 }

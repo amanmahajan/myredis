@@ -39,12 +39,21 @@ func EvalAndRespond(cmds RedisCommands, c io.ReadWriter) {
 		case "EXPIRE":
 
 			buffer.Write(evaluateExpire(cmd.Args))
-
+		case "BGREWRITEAOF":
+			buffer.Write(evaluateBGREWRITEAOF(cmd.Args))
+		case "INCR":
+			buffer.Write(evaluateIncr(cmd.Args))
 		default:
 			buffer.Write(evaluatePing(cmd.Args))
 		}
 	}
 	c.Write(buffer.Bytes())
+}
+
+func evaluateBGREWRITEAOF(args []string) []byte {
+	DumpData()
+	return RespOk
+
 }
 
 func evaluatePing(args []string) []byte {
@@ -65,7 +74,7 @@ func evaluatePing(args []string) []byte {
 
 func evaluateSet(args []string) []byte {
 	if len(args) <= 1 {
-		return Encode(errors.New("Not enough arguments"), false)
+		return Encode(errors.New("Not enough arguments for the set command"), false)
 	}
 
 	var key, val string
@@ -73,6 +82,8 @@ func evaluateSet(args []string) []byte {
 
 	key = args[0]
 	val = args[1]
+
+	objType, objEnc := deduceTypeEncoding(val)
 
 	for k := 2; k < len(args); k++ {
 
@@ -93,7 +104,7 @@ func evaluateSet(args []string) []byte {
 		}
 	}
 
-	Put(key, NewObject(val, duration))
+	Put(key, NewObject(val, duration, objType, objEnc))
 	return RespOk
 }
 
@@ -170,4 +181,31 @@ func evaluateExpire(args []string) []byte {
 
 	key.Value = time.Now().UnixMilli() + expireTime*1000
 	return RespOne
+}
+
+func evaluateIncr(args []string) []byte {
+	if len(args) != 1 {
+		return Encode(errors.New("Wrong arguments for incr"), false)
+	}
+
+	key := args[0]
+	val := Get(key)
+	if val == nil {
+		val = NewObject("0", -1, OBJ_TYPE_STRING, OBJ_ENCODING_INT)
+		Put(key, val)
+	}
+	if err := assertType(val.TypeEncoding, OBJ_TYPE_STRING); err != nil {
+		return Encode(err, false)
+	}
+
+	if err := assertEncoding(val.TypeEncoding, OBJ_ENCODING_INT); err != nil {
+		return Encode(err, false)
+	}
+
+	i, _ := strconv.ParseInt(val.Value.(string), 10, 64)
+	i++
+	val.Value = strconv.FormatInt(i, 10)
+
+	return Encode(i, false)
+
 }
