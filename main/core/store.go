@@ -1,6 +1,9 @@
 package core
 
-import "time"
+import (
+	"myredis/config"
+	"time"
+)
 
 // Starting the project just with hashmap. Will optimize later
 var store map[string]*Obj
@@ -23,17 +26,36 @@ func NewObject(value interface{}, durationMs int64, objType uint8, objEncoding u
 }
 
 func Put(key string, value *Obj) {
+
+	if len(store) > config.KeyLimits {
+		evictAllKeyRandom()
+	}
+	if KeySpaceStats[0] == nil {
+		KeySpaceStats[0] = make(map[string]int, 0)
+	}
 	store[key] = value
+	KeySpaceStats[0]["Keys"]++
 }
 
 func Get(key string) *Obj {
-	return store[key]
+	val := store[key]
+	if val != nil {
+		if val.Expiry != -1 && val.Expiry >= time.Now().UnixMilli() {
+			Delete(key)
+			return nil
+
+		}
+	}
+	return val
+
 }
 
 func Delete(key string) bool {
 	if _, ok := store[key]; ok {
 		delete(store, key)
+		KeySpaceStats[0]["Keys"]--
 		return true
 	}
+
 	return false
 }
