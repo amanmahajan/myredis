@@ -45,11 +45,13 @@ func EvalAndRespond(cmds RedisCommands, c io.ReadWriter) {
 		case "INCR":
 			buffer.Write(evaluateIncr(cmd.Args))
 		case "INFO":
-			buf.Write(evaluateInfo(cmd.Args))
+			buffer.Write(evaluateInfo(cmd.Args))
 		case "CLIENT":
 			buffer.Write(evaluateClient())
 		case "LATENCY":
-			buf.Write(evaluateLatency())
+			buffer.Write(evaluateLatency())
+		case "LRU":
+			buffer.Write(evaluateLRU())
 		default:
 			buffer.Write(evaluatePing(cmd.Args))
 		}
@@ -60,6 +62,12 @@ func EvalAndRespond(cmds RedisCommands, c io.ReadWriter) {
 func evaluateBGREWRITEAOF(args []string) []byte {
 	DumpData()
 	return RespOk
+
+}
+
+func evaluateLRU() []byte {
+	evictAllkeysLRU()
+	return RespOne
 
 }
 
@@ -127,7 +135,7 @@ func evaluateGet(args []string) []byte {
 		return NilResp
 	}
 
-	if obj.Expiry != -1 && obj.Expiry < time.Now().UnixMilli() {
+	if hasExpired(obj) {
 		return NilResp
 	}
 	return Encode(obj.Value, false)
@@ -146,15 +154,19 @@ func evaluateTTL(args []string) []byte {
 	if obj == nil {
 		return NoKeyExist
 	}
-	if obj.Expiry == -1 {
+
+	exp, ok := getExpiry(obj)
+
+	if !ok {
+		return NilResp
+	}
+
+	if exp <= uint64(time.Now().UnixMilli()) {
 		return NoKeyExist
 	}
 
-	remainingDurationMs := -obj.Expiry - time.Now().UnixMilli()
-	if remainingDurationMs < 0 {
-		return NoKeyExist
+	remainingDurationMs := exp - uint64(time.Now().UnixMilli())
 
-	}
 	return Encode(int64(remainingDurationMs/1000), false)
 }
 

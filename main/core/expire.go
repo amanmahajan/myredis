@@ -7,6 +7,19 @@ import (
 
 const sampleKeysLimit = 20
 
+func hasExpired(obj *Obj) bool {
+	val, ok := expires[obj]
+	if !ok {
+		return false
+	}
+	return val <= uint64(time.Now().UnixMilli())
+}
+
+func getExpiry(obj *Obj) (uint64, bool) {
+	exp, ok := expires[obj]
+	return exp, ok
+}
+
 // Redis Sampling method to delete he expired keys.
 func expireSampleKeys() float32 {
 
@@ -17,11 +30,9 @@ func expireSampleKeys() float32 {
 		if count > sampleKeysLimit {
 			break
 		}
-		if val.Expiry <= time.Now().UnixMilli() {
-
+		if hasExpired(val) {
 			Delete(key)
 			deletedKeys += 1
-
 		}
 		count++
 	}

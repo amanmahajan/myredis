@@ -1,9 +1,9 @@
 package core
 
 type Obj struct {
-	TypeEncoding uint8
-	Value        interface{}
-	Expiry       int64
+	TypeEncoding   uint8
+	Value          interface{}
+	LastAccessedAt uint32
 }
 
 /**
